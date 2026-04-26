@@ -46,6 +46,7 @@ packages:
     - fonts-liberation
     - fonts-dejavu
     - fontconfig
+    - systemd-zram-generator
     action: install
 
 files:
@@ -130,6 +131,9 @@ actions:
     sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/'               /etc/ssh/sshd_config
     sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
     systemctl enable ssh
+
+    # zram swap: half of RAM, zstd compressed
+    printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf
 
 - trigger: post-files
   action: |-

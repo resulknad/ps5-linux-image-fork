@@ -158,6 +158,7 @@ echo "=== Assembling boot partition ==="
 mv /tmp/usb_root/boot/efi/* /tmp/usb_efi/ 2>/dev/null || true
 sed "s|__DISTRO__|$ROOT_LABEL|" /repo/boot/cmdline.txt > /tmp/usb_efi/cmdline.txt
 cp /repo/boot/vram.txt     /tmp/usb_efi/
+cp /repo/boot/kexec.sh     /tmp/usb_efi/
 sync
 
 umount /tmp/usb_root /tmp/usb_efi
