@@ -8,13 +8,7 @@ on:
         default: 'all'
         type: choice
         options: [deb, arch, all]
-  # Triggered by resulknad/ps5-linux-patches on push to main:
-  #   uses: peter-evans/repository-dispatch@v3
-  #   with:
-  #     token: ${{ secrets.DISPATCH_TOKEN }}
-  #     repository: resulknad/ps5-linux-image-fork
-  #     event-type: patches-updated
-  #     client-payload: '{"format": "all"}'
+  # Triggered by resulknad/ps5-linux-patches on push to main.
   repository_dispatch:
     types: [patches-updated]
 
@@ -34,20 +28,23 @@ jobs:
         with:
           repository: resulknad/ps5-linux-patches
           token: ${{ secrets.PATCHES_TOKEN }}
+          ref: ${{ github.event.client_payload.sha || '' }}
           path: work/ps5-linux-patches
 
-      - name: Read kernel version
+      - name: Read kernel and patches version
         id: version
         run: |
           kver=$(grep -m1 "^# Linux/" work/ps5-linux-patches/.config \
             | grep -oP '\d+\.\d+(\.\d+)?')
+          psha=$(git -C work/ps5-linux-patches rev-parse --short HEAD)
           echo "kver=$kver" >> "$GITHUB_OUTPUT"
+          echo "psha=$psha" >> "$GITHUB_OUTPUT"
 
       - name: Cache ccache
         uses: actions/cache@v4
         with:
           path: cache/ccache
-          key: ccache-${{ steps.version.outputs.kver }}-${{ hashFiles('work/ps5-linux-patches/*.patch', 'work/ps5-linux-patches/.config') }}
+          key: ccache-${{ steps.version.outputs.kver }}-${{ steps.version.outputs.psha }}
           restore-keys: |
             ccache-${{ steps.version.outputs.kver }}-
             ccache-
@@ -62,7 +59,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ steps.version.outputs.kver }}-${{ github.run_number }}
+          name: kernel-${{ steps.version.outputs.kver }}-${{ steps.version.outputs.psha }}
           path: |
             linux-bin/*.deb
             linux-bin/*.pkg.tar.zst
@@ -71,12 +68,12 @@ jobs:
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: kernel-${{ steps.version.outputs.kver }}
-          name: Kernel ${{ steps.version.outputs.kver }}
+          tag_name: kernel-${{ steps.version.outputs.kver }}-${{ steps.version.outputs.psha }}
+          name: Kernel ${{ steps.version.outputs.kver }} (${{ steps.version.outputs.psha }})
           body: |
             PS5 Linux kernel packages for **${{ steps.version.outputs.kver }}**.
 
-            Built from [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
+            Patches: [`${{ steps.version.outputs.psha }}`](https://github.com/resulknad/ps5-linux-patches/commit/${{ steps.version.outputs.psha }})
           files: |
             linux-bin/*.deb
             linux-bin/*.pkg.tar.zst
