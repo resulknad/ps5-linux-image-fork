@@ -170,7 +170,7 @@ stage_kernel_package_deb() {
             -v "$kernel_out":/out \
             -v "$ccache_dir":/ccache \
             ps5-kernel-builder \
-            bash -c 'make -j$(nproc) bindeb-pkg && cp /*.deb /out/'
+            bash -c 'make -j$(nproc) DPKG_FLAGS=-d bindeb-pkg && cp /*.deb /out/'
 }
 
 # Package staged artifacts as a pacman .pkg.tar.zst.
