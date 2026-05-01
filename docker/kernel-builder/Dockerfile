@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdw-dev libelf-dev libssl-dev \
     python3 rsync dpkg-dev debhelper zstd \
     perl git xz-utils ccache \
-    gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu \
+    gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu libc6-dev-amd64-cross \
     && rm -rf /var/lib/apt/lists/*
 
 ENV ARCH=x86_64
