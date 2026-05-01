@@ -15,9 +15,23 @@ cleanup() {
 }
 
 # run_stage <name> <cmd...>
+# In CI (GitHub Actions) streams output directly with log groups instead of a spinner.
 run_stage() {
     local name="$1"
     shift
+
+    if [ "${CI:-}" = "true" ]; then
+        echo "::group::$name"
+        local rc=0
+        "$@" || rc=$?
+        echo "::endgroup::"
+        if [ $rc -ne 0 ]; then
+            echo "::error::Build failed at: $name"
+            exit $rc
+        fi
+        return
+    fi
+
     local status_msg="$name"
     local spin_i=0
 
