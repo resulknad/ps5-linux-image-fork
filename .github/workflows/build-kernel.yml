@@ -19,6 +19,9 @@ jobs:
     permissions:
       contents: write   # required to create releases
 
+    env:
+      CCACHE_DIR: /home/opc/ccache
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,17 +43,16 @@ jobs:
           echo "kver=$kver" >> "$GITHUB_OUTPUT"
           echo "psha=$psha" >> "$GITHUB_OUTPUT"
 
-      - name: Mount persistent ccache
-        run: |
-          mkdir -p /home/opc/ccache cache
-          ln -sfn /home/opc/ccache cache/ccache
-
       - name: Build kernel
         run: |
           FORMAT="${{ github.event.inputs.format || github.event.client_payload.format || 'all' }}"
           bash build_kernel.sh \
             --patches-dir work/ps5-linux-patches \
             --format "$FORMAT"
+
+      - name: Fix ccache ownership
+        if: always()
+        run: sudo chown -R opc:opc /home/opc/ccache
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
