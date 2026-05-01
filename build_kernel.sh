@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+export DOCKER_DEFAULT_PLATFORM=linux/amd64
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib/build-common.sh
 source "$SCRIPT_DIR/lib/build-common.sh"
