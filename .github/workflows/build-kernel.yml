@@ -25,13 +25,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          clean: false
-
-      - name: Clean stale build artifacts
-        run: |
-          rm -f cache/ccache
-          sudo rm -rf linux-bin work/linux
 
       - name: Checkout ps5-linux-patches
         uses: actions/checkout@v4
@@ -57,9 +50,9 @@ jobs:
             --patches-dir work/ps5-linux-patches \
             --format "$FORMAT"
 
-      - name: Fix ccache ownership
+      - name: Fix workspace ownership
         if: always()
-        run: sudo chown -R opc:opc /home/opc/ccache
+        run: sudo chown -R opc:opc "$GITHUB_WORKSPACE" /home/opc/ccache
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
