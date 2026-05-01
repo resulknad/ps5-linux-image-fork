@@ -179,11 +179,11 @@ stage_kernel_package_arch() {
     local kernel_out="$1"
 
     run_stage "Build arch packager image" \
-        docker build --platform linux/amd64 -t ps5-kernel-packager-arch \
+        docker build -t ps5-kernel-packager-arch \
             -f "$SCRIPT_DIR/docker/kernel-builder-arch/Dockerfile" "$SCRIPT_DIR"
 
     run_stage "Package kernel (.pkg.tar.zst)" \
-        docker run --rm --platform linux/amd64 --name "$DOCKER_NAME" \
+        docker run --rm --name "$DOCKER_NAME" \
             -v "$kernel_out":/out \
             ps5-kernel-packager-arch
 }

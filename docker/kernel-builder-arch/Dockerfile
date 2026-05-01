@@ -1,9 +1,11 @@
-FROM archlinux:latest
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Only packaging tools needed — kernel is already compiled
-RUN pacman -Syu --noconfirm && pacman -S --noconfirm \
-    zstd libarchive && \
-    pacman -Scc --noconfirm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libarchive-tools zstd \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /out/staging
 
