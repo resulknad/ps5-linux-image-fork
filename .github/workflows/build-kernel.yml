@@ -1,0 +1,83 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      format:
+        description: 'Package format'
+        default: 'all'
+        type: choice
+        options: [deb, arch, all]
+  # Triggered by resulknad/ps5-linux-patches on push to main:
+  #   uses: peter-evans/repository-dispatch@v3
+  #   with:
+  #     token: ${{ secrets.DISPATCH_TOKEN }}
+  #     repository: resulknad/ps5-linux-image-fork
+  #     event-type: patches-updated
+  #     client-payload: '{"format": "all"}'
+  repository_dispatch:
+    types: [patches-updated]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 120
+    permissions:
+      contents: write   # required to create releases
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout ps5-linux-patches
+        uses: actions/checkout@v4
+        with:
+          repository: resulknad/ps5-linux-patches
+          token: ${{ secrets.PATCHES_TOKEN }}
+          path: work/ps5-linux-patches
+
+      - name: Read kernel version
+        id: version
+        run: |
+          kver=$(grep -m1 "^# Linux/" work/ps5-linux-patches/.config \
+            | grep -oP '\d+\.\d+(\.\d+)?')
+          echo "kver=$kver" >> "$GITHUB_OUTPUT"
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: cache/ccache
+          key: ccache-${{ steps.version.outputs.kver }}-${{ hashFiles('work/ps5-linux-patches/*.patch', 'work/ps5-linux-patches/.config') }}
+          restore-keys: |
+            ccache-${{ steps.version.outputs.kver }}-
+            ccache-
+
+      - name: Build kernel
+        run: |
+          FORMAT="${{ github.event.inputs.format || github.event.client_payload.format || 'all' }}"
+          bash build_kernel.sh \
+            --patches-dir work/ps5-linux-patches \
+            --format "$FORMAT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ steps.version.outputs.kver }}-${{ github.run_number }}
+          path: |
+            linux-bin/*.deb
+            linux-bin/*.pkg.tar.zst
+          retention-days: 7
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kernel-${{ steps.version.outputs.kver }}
+          name: Kernel ${{ steps.version.outputs.kver }}
+          body: |
+            PS5 Linux kernel packages for **${{ steps.version.outputs.kver }}**.
+
+            Built from [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
+          files: |
+            linux-bin/*.deb
+            linux-bin/*.pkg.tar.zst
+          make_latest: true
