@@ -40,14 +40,10 @@ jobs:
           echo "kver=$kver" >> "$GITHUB_OUTPUT"
           echo "psha=$psha" >> "$GITHUB_OUTPUT"
 
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: cache/ccache
-          key: ccache-${{ steps.version.outputs.kver }}-${{ steps.version.outputs.psha }}
-          restore-keys: |
-            ccache-${{ steps.version.outputs.kver }}-
-            ccache-
+      - name: Mount persistent ccache
+        run: |
+          mkdir -p /home/opc/ccache cache
+          ln -sfn /home/opc/ccache cache/ccache
 
       - name: Build kernel
         run: |
