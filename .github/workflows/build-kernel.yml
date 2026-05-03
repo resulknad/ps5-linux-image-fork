@@ -1,0 +1,78 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      format:
+        description: 'Package format'
+        default: 'all'
+        type: choice
+        options: [deb, arch, all]
+  # Triggered by resulknad/ps5-linux-patches on push to main.
+  repository_dispatch:
+    types: [patches-updated]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 120
+    permissions:
+      contents: write   # required to create releases
+
+    env:
+      CCACHE_DIR: /home/opc/ccache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout ps5-linux-patches
+        uses: actions/checkout@v4
+        with:
+          repository: resulknad/ps5-linux-patches
+          token: ${{ secrets.PATCHES_TOKEN }}
+          ref: ${{ github.event.client_payload.sha || '' }}
+          path: work/ps5-linux-patches
+
+      - name: Read kernel and patches version
+        id: version
+        run: |
+          kver=$(grep -m1 "^# Linux/" work/ps5-linux-patches/.config \
+            | grep -oP '\d+\.\d+(\.\d+)?')
+          psha=$(git -C work/ps5-linux-patches rev-parse --short HEAD)
+          echo "kver=$kver" >> "$GITHUB_OUTPUT"
+          echo "psha=$psha" >> "$GITHUB_OUTPUT"
+
+      - name: Build kernel
+        run: |
+          FORMAT="${{ github.event.inputs.format || github.event.client_payload.format || 'all' }}"
+          bash build_kernel.sh \
+            --patches-dir work/ps5-linux-patches \
+            --format "$FORMAT"
+
+      - name: Fix workspace ownership
+        if: always()
+        run: sudo chown -R opc:opc "$GITHUB_WORKSPACE" /home/opc/ccache
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ steps.version.outputs.kver }}-${{ steps.version.outputs.psha }}
+          path: |
+            linux-bin/*.deb
+            linux-bin/*.pkg.tar.zst
+          retention-days: 7
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kernel-${{ steps.version.outputs.kver }}-${{ steps.version.outputs.psha }}
+          name: Kernel ${{ steps.version.outputs.kver }} (${{ steps.version.outputs.psha }})
+          body: |
+            PS5 Linux kernel packages for **${{ steps.version.outputs.kver }}**.
+
+            Patches: [`${{ steps.version.outputs.psha }}`](https://github.com/resulknad/ps5-linux-patches/commit/${{ steps.version.outputs.psha }})
+          files: |
+            linux-bin/*.deb
+            linux-bin/*.pkg.tar.zst
+          make_latest: true
