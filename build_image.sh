@@ -4,6 +4,9 @@ set -e
 export DOCKER_DEFAULT_PLATFORM=linux/amd64
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/build-common.sh
+source "$SCRIPT_DIR/lib/build-common.sh"
+
 DISTRO="ubuntu2604"
 KERNEL_SRC=""
 CLEAN=false
@@ -33,14 +36,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-LINUX_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
-LINUX_DEFAULT_DIR="$SCRIPT_DIR/work/linux"
-
-PATCHES_REPO="https://github.com/ps5-linux/ps5-linux-patches.git"
+PATCHES_REPO="git@github.com:resulknad/ps5-linux-patches.git"
 PATCHES_BRANCH="v1.0"
 PATCHES_DIR="$SCRIPT_DIR/work/ps5-linux-patches"
-PATCHES_CONFIG=".config"
 
+LINUX_DEFAULT_DIR="$SCRIPT_DIR/work/linux"
 if [ -z "$KERNEL_SRC" ]; then
     KERNEL_SRC="$LINUX_DEFAULT_DIR"
 fi
@@ -49,25 +49,15 @@ KERNEL_OUT="$SCRIPT_DIR/linux-bin"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 CHROOT_DIR="$SCRIPT_DIR/work/chroot"
 CACHE_DIR="$SCRIPT_DIR/work/cache"
-CCACHE_DIR="$SCRIPT_DIR/cache/ccache"
+CCACHE_DIR="${CCACHE_DIR:-$SCRIPT_DIR/ccache}"
 LOG_FILE="$SCRIPT_DIR/build.log"
 DOCKER_NAME="ps5-build-$$"
+BUILD_PID=""
 
 if [ "$DISTRO" = "all" ] && [ "$IMG_SIZE" = "12000" ]; then
     IMG_SIZE=32000
 fi
 
-# --- Signal trap: clean up docker containers and background jobs on exit ---
-BUILD_PID=""
-
-cleanup() {
-    echo ""
-    echo "Interrupted. Cleaning up..."
-    docker kill "$DOCKER_NAME" 2>/dev/null || true
-    [ -n "$BUILD_PID" ] && kill "$BUILD_PID" 2>/dev/null || true
-    wait "$BUILD_PID" 2>/dev/null || true
-    exit 130
-}
 trap cleanup INT TERM
 
 # --- Clean ---
@@ -152,53 +142,7 @@ echo ""
 echo "Logs: $LOG_FILE"
 echo ""
 
-# --- Logging + stage runner ---
 : > "$LOG_FILE"
-
-SPIN_CHARS='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-
-run_stage() {
-    local name="$1"
-    shift
-    local status_msg="$name"
-    local spin_i=0
-
-    # Record log position so we only scan new lines for status updates
-    local log_start
-    log_start=$(wc -l < "$LOG_FILE")
-
-    # Run command in background
-    "$@" >> "$LOG_FILE" 2>&1 &
-    BUILD_PID=$!
-
-    # Spinner loop — pick up === status lines from the log
-    while kill -0 "$BUILD_PID" 2>/dev/null; do
-        if (( spin_i % 10 == 0 )); then
-            local new
-            new=$(tail -n +$((log_start + 1)) "$LOG_FILE" 2>/dev/null \
-                | grep -oP '(?<=^=== ).*(?= ===$)' | tail -1)
-            [ -n "$new" ] && status_msg="$new"
-        fi
-        printf "\r  %s %-60s" "${SPIN_CHARS:spin_i%${#SPIN_CHARS}:1}" "$status_msg"
-        spin_i=$((spin_i + 1))
-        sleep 0.1
-    done
-
-    local rc=0
-    wait "$BUILD_PID" || rc=$?
-    BUILD_PID=""
-
-    if [ $rc -eq 0 ]; then
-        printf "\r  ✓ %-60s\n" "$name"
-    else
-        printf "\r  ✗ %-60s\n" "$status_msg"
-        echo ""
-        echo "Build failed at: $status_msg"
-        echo "Logs: $LOG_FILE"
-        echo "Try running with --clean to start fresh."
-        exit 1
-    fi
-}
 
 # --- Setup directories ---
 mkdir -p "$KERNEL_OUT" "$OUTPUT_DIR" "$CHROOT_DIR" "$CACHE_DIR" "$CCACHE_DIR"
@@ -213,91 +157,24 @@ if [ "$SKIP_KERNEL" = true ]; then
     printf "  ✓ %-60s\n" "Kernel packages (cached)"
 else
     if [ ! -d "$KERNEL_SRC/.git" ]; then
-        LINUX_TMP_DIR="${LINUX_DEFAULT_DIR}.tmp"
-        rm -rf "$LINUX_TMP_DIR"
-
-        mkdir -p "$PATCHES_DIR"
-        if [ ! -d "$PATCHES_DIR/.git" ]; then
-            run_stage "Clone ps5-linux-patches" \
-                git clone --branch "$PATCHES_BRANCH" --depth 1 "$PATCHES_REPO" "$PATCHES_DIR"
-        else
-            run_stage "Update ps5-linux-patches" bash -c '
-                git -C "'"$PATCHES_DIR"'" fetch --depth 1 origin tag "'"$PATCHES_BRANCH"'"
-                git -C "'"$PATCHES_DIR"'" checkout "'"$PATCHES_BRANCH"'"
-                git -C "'"$PATCHES_DIR"'" reset --hard "'"$PATCHES_BRANCH"'"'
-        fi
-        LINUX_BRANCH="v$(grep -m1 "^# Linux/" "$PATCHES_DIR/.config" | grep -oP '\d+\.\d+(\.\d+)?')"
-
-        run_stage "Clone kernel $LINUX_BRANCH" \
-            git clone --branch "$LINUX_BRANCH" --depth 1 "$LINUX_REPO" "$LINUX_TMP_DIR"
-
-        run_stage "Apply patches" bash -c '
-            set -e
-            shopt -s nullglob
-            patches=("'"$PATCHES_DIR"'"/*.patch)
-            [ ${#patches[@]} -eq 0 ] && { echo "No .patch files found in '"$PATCHES_DIR"'"; exit 1; }
-            for p in "${patches[@]}"; do
-                echo "Applying $p"
-                git -C "'"$LINUX_TMP_DIR"'" apply --exclude=Makefile "$p"
-            done'
-
-        run_stage "Copy kernel config" \
-            cp "$PATCHES_DIR/$PATCHES_CONFIG" "$LINUX_TMP_DIR/.config"
-
-        mv "$LINUX_TMP_DIR" "$LINUX_DEFAULT_DIR"
+        stage_kernel_pull_patches "$PATCHES_DIR" "$PATCHES_REPO" "" "$PATCHES_BRANCH"
+        stage_kernel_clone_and_patch "$KERNEL_SRC" "$PATCHES_DIR"
     else
         printf "  ✓ %-60s\n" "Kernel source (cached)"
     fi
 
     KERNEL_SRC="$(cd "$KERNEL_SRC" && pwd)"
-
     rm -f "$KERNEL_OUT"/*.$PKG_EXT
 
-    run_stage "Build kernel builder image" \
-        docker build -t ps5-kernel-builder -f "$SCRIPT_DIR/docker/kernel-builder/Dockerfile" "$SCRIPT_DIR"
-
-    run_stage "Compile kernel" \
-        docker run --rm --name "$DOCKER_NAME" \
-            -v "$KERNEL_SRC":/src \
-            -v "$KERNEL_OUT":/out \
-            -v "$CCACHE_DIR":/ccache \
-            ps5-kernel-builder
+    stage_kernel_compile "$KERNEL_SRC" "$KERNEL_OUT" "$CCACHE_DIR"
 
     if [ "$DISTRO" = "all" ]; then
-        run_stage "Package kernel (.deb)" \
-            docker run --rm --name "$DOCKER_NAME" \
-                -v "$KERNEL_SRC":/src \
-                -v "$KERNEL_OUT":/out \
-                -v "$CCACHE_DIR":/ccache \
-                ps5-kernel-builder \
-                bash -c 'make -j$(nproc) bindeb-pkg && cp /*.deb /out/'
-
-        run_stage "Build arch packager image" \
-            docker build -t ps5-kernel-packager-arch \
-                -f "$SCRIPT_DIR/docker/kernel-builder-arch/Dockerfile" "$SCRIPT_DIR"
-
-        run_stage "Package kernel (.pkg.tar.zst)" \
-            docker run --rm --name "$DOCKER_NAME" \
-                -v "$KERNEL_OUT":/out \
-                ps5-kernel-packager-arch
-
+        stage_kernel_package_deb "$KERNEL_SRC" "$KERNEL_OUT" "$CCACHE_DIR"
+        stage_kernel_package_arch "$KERNEL_OUT"
     elif [ "$DISTRO" = "arch" ]; then
-        run_stage "Build arch packager image" \
-            docker build -t ps5-kernel-packager-arch \
-                -f "$SCRIPT_DIR/docker/kernel-builder-arch/Dockerfile" "$SCRIPT_DIR"
-
-        run_stage "Package kernel (.pkg.tar.zst)" \
-            docker run --rm --name "$DOCKER_NAME" \
-                -v "$KERNEL_OUT":/out \
-                ps5-kernel-packager-arch
+        stage_kernel_package_arch "$KERNEL_OUT"
     else
-        run_stage "Package kernel (.deb)" \
-            docker run --rm --name "$DOCKER_NAME" \
-                -v "$KERNEL_SRC":/src \
-                -v "$KERNEL_OUT":/out \
-                -v "$CCACHE_DIR":/ccache \
-                ps5-kernel-builder \
-                bash -c 'make -j$(nproc) bindeb-pkg && cp /*.deb /out/'
+        stage_kernel_package_deb "$KERNEL_SRC" "$KERNEL_OUT" "$CCACHE_DIR"
     fi
 fi
 

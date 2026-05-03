@@ -7,7 +7,7 @@ image:
 
 source:
   downloader: debootstrap
-  url: http://archive.ubuntu.com/ubuntu
+  url: http://de.archive.ubuntu.com/ubuntu
   variant: minbase
   keyserver: keyserver.ubuntu.com
   keys:
@@ -22,8 +22,8 @@ packages:
   repositories:
   - name: sources.list
     url: |-
-      deb http://archive.ubuntu.com/ubuntu {{ image.release }} main restricted universe multiverse
-      deb http://archive.ubuntu.com/ubuntu {{ image.release }}-updates main restricted universe multiverse
+      deb http://de.archive.ubuntu.com/ubuntu {{ image.release }} main restricted universe multiverse
+      deb http://de.archive.ubuntu.com/ubuntu {{ image.release }}-updates main restricted universe multiverse
       deb http://security.ubuntu.com/ubuntu {{ image.release }}-security main restricted universe multiverse
     architectures:
     - amd64
