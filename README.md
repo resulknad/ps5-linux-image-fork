@@ -105,10 +105,29 @@ All verbose output goes to `build.log`. The terminal shows a spinner with live p
 
 The boot partition contains kexec scripts to switch between distros at runtime. Ubuntu 26.04 is the default boot target.
 
+## Building the Kernel Standalone
+
+`build_kernel.sh` compiles the PS5 kernel and produces installable packages without building a full disk image.
+
+```bash
+./build_kernel.sh                                      # .deb (default)
+./build_kernel.sh --format all                         # .deb + .pkg.tar.zst
+./build_kernel.sh --patches-dir /path/to/patches       # use local patches checkout
+./build_kernel.sh --clean                              # wipe and rebuild from scratch
+```
+
+Output packages are written to `linux-bin/`. Install on a running PS5 Linux system:
+
+```bash
+sudo dpkg -i linux-bin/linux-ps5_*.deb
+```
+
 ## Directory Layout
 
 ```
-build_image.sh                  # Main build script
+build_image.sh                  # Full image builder
+build_kernel.sh                 # Standalone kernel builder
+lib/build-common.sh             # Shared build functions
 docker/
   kernel-builder/               # Kernel compilation container
   kernel-builder-arch/          # Repackages .deb kernel as .pkg.tar.zst
