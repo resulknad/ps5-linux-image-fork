@@ -14,6 +14,7 @@ LOCAL=false
 PATCHES_DIR_ARG=""
 FORMAT=""
 PATCHES_TOKEN=""
+CROSS_COMPILE=false
 
 MULTI_DISTROS="ubuntu2604 ubuntu2404 arch alpine"
 
@@ -31,6 +32,7 @@ Options:
   --patches-dir <p>   Use this patches directory instead of cloning
   --format <fmt>      Package format: deb, arch, all (default: auto from distro)
   --patches-token <t> GitHub token for HTTPS patches repo access
+  --cross-compile     Run kernel builder as linux/arm64 (native cross-compile on aarch64 hosts)
 EOF
     exit 1
 }
@@ -46,6 +48,7 @@ while [[ $# -gt 0 ]]; do
         --patches-dir)    PATCHES_DIR_ARG="$2"; shift 2 ;;
         --format)         FORMAT="$2";          shift 2 ;;
         --patches-token)  PATCHES_TOKEN="$2";   shift 2 ;;
+        --cross-compile)  CROSS_COMPILE=true;   shift ;;
         -h|--help)        usage ;;
         *) echo "Unknown option: $1"; usage ;;
     esac
@@ -89,10 +92,8 @@ if [ -z "$FORMAT" ]; then
     case "$DISTRO" in arch) FORMAT="arch" ;; all) FORMAT="all" ;; *) FORMAT="deb" ;; esac
 fi
 
-# On aarch64 hosts, run the kernel builder natively so the cross-compiler isn't QEMU-emulated.
-# On x86_64 hosts, default platform applies (linux/amd64 via DOCKER_DEFAULT_PLATFORM).
 KERNEL_BUILDER_PLATFORM="linux/amd64"
-[ "$(uname -m)" = "aarch64" ] && KERNEL_BUILDER_PLATFORM="linux/arm64"
+[ "$CROSS_COMPILE" = true ] && KERNEL_BUILDER_PLATFORM="linux/arm64"
 
 BUILD_PID=""
 
