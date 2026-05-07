@@ -89,6 +89,11 @@ if [ -z "$FORMAT" ]; then
     case "$DISTRO" in arch) FORMAT="arch" ;; all) FORMAT="all" ;; *) FORMAT="deb" ;; esac
 fi
 
+# On aarch64 hosts, run the kernel builder natively so the cross-compiler isn't QEMU-emulated.
+# On x86_64 hosts, default platform applies (linux/amd64 via DOCKER_DEFAULT_PLATFORM).
+KERNEL_BUILDER_PLATFORM="linux/amd64"
+[ "$(uname -m)" = "aarch64" ] && KERNEL_BUILDER_PLATFORM="linux/arm64"
+
 BUILD_PID=""
 
 cleanup() {
@@ -282,11 +287,11 @@ else
     rm -f "$KERNEL_OUT"/*.deb "$KERNEL_OUT"/*.pkg.tar.zst
 
     run_stage "Build kernel builder image" \
-        docker build --platform linux/arm64 -t ps5-kernel-builder \
+        docker build --platform "$KERNEL_BUILDER_PLATFORM" -t ps5-kernel-builder \
             -f "$SCRIPT_DIR/docker/kernel-builder/Dockerfile" "$SCRIPT_DIR"
 
     run_stage "Compile kernel" \
-        docker run --rm --platform linux/arm64 --name "$DOCKER_NAME" \
+        docker run --rm --platform "$KERNEL_BUILDER_PLATFORM" --name "$DOCKER_NAME" \
             -v "$KERNEL_SRC":/src \
             -v "$KERNEL_OUT":/out \
             -v "$CCACHE_DIR":/ccache \
@@ -296,7 +301,7 @@ else
 
     case "$FORMAT" in deb|all)
         run_stage "Package kernel (.deb)" \
-            docker run --rm --platform linux/arm64 --name "$DOCKER_NAME" \
+            docker run --rm --platform "$KERNEL_BUILDER_PLATFORM" --name "$DOCKER_NAME" \
                 -v "$KERNEL_SRC":/src \
                 -v "$KERNEL_OUT":/out \
                 -v "$CCACHE_DIR":/ccache \
