@@ -112,7 +112,10 @@ run_stage() {
         local rc=0
         "$@" || rc=$?
         echo "::endgroup::"
-        [ $rc -ne 0 ] && { echo "::error::Build failed at: $name"; exit $rc; }
+        if [ $rc -ne 0 ]; then
+            echo "::error::Build failed at: $name"
+            exit $rc
+        fi
         return
     fi
 
