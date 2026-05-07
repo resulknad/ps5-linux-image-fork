@@ -282,10 +282,11 @@ else
     rm -f "$KERNEL_OUT"/*.deb "$KERNEL_OUT"/*.pkg.tar.zst
 
     run_stage "Build kernel builder image" \
-        docker build -t ps5-kernel-builder -f "$SCRIPT_DIR/docker/kernel-builder/Dockerfile" "$SCRIPT_DIR"
+        docker build --platform linux/arm64 -t ps5-kernel-builder \
+            -f "$SCRIPT_DIR/docker/kernel-builder/Dockerfile" "$SCRIPT_DIR"
 
     run_stage "Compile kernel" \
-        docker run --rm --name "$DOCKER_NAME" \
+        docker run --rm --platform linux/arm64 --name "$DOCKER_NAME" \
             -v "$KERNEL_SRC":/src \
             -v "$KERNEL_OUT":/out \
             -v "$CCACHE_DIR":/ccache \
@@ -295,7 +296,7 @@ else
 
     case "$FORMAT" in deb|all)
         run_stage "Package kernel (.deb)" \
-            docker run --rm --name "$DOCKER_NAME" \
+            docker run --rm --platform linux/arm64 --name "$DOCKER_NAME" \
                 -v "$KERNEL_SRC":/src \
                 -v "$KERNEL_OUT":/out \
                 -v "$CCACHE_DIR":/ccache \

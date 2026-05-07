@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go (Ubuntu 24.04 only has 1.22, distrobuilder needs newer)
-RUN wget -q https://go.dev/dl/go1.25.6.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
+RUN wget -q https://go.dev/dl/go1.25.6.linux-arm64.tar.gz -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
