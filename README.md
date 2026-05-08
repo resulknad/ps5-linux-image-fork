@@ -44,9 +44,11 @@ sudo dd if=output/ps5-ubuntu2604.img of=/dev/sdX bs=4M status=progress
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--distro` | `ubuntu2604`, `ubuntu2404`, `arch`, `alpine`, or `all` | `ubuntu2604` |
-| `--kernel` | Path to kernel source directory | auto-clone `v6.19.10` |
+| `--kernel` | Path to kernel source directory | auto-clone to work/linux/ |
 | `--img-size` | Disk image size in MB | `12000` (`32000` for `all`) |
 | `--clean` | Remove all cached build artifacts and start fresh | off |
+| `--kernel-only` | Build and package the kernel only, then exit | off |
+| `--patches-ref` | Branch, tag, or commit SHA for patches | `v1.0` |
 
 ## Caching
 
@@ -105,10 +107,27 @@ All verbose output goes to `build.log`. The terminal shows a spinner with live p
 
 The boot partition contains kexec scripts to switch between distros at runtime. Ubuntu 26.04 is the default boot target.
 
+## Building the Kernel Standalone
+
+Use `--kernel-only` to compile the PS5 kernel and produce installable packages without building a full disk image.
+
+```bash
+./build_image.sh --kernel-only                                # .deb (default)
+./build_image.sh --kernel-only --distro all                   # .deb + .pkg.tar.zst
+./build_image.sh --kernel-only --patches-ref main             # fetch from specific branch/tag
+./build_image.sh --kernel-only --clean                        # wipe and rebuild from scratch
+```
+
+Output packages are written to `linux-bin/`. Install on a running PS5 Linux system:
+
+```bash
+sudo dpkg -i linux-bin/linux-ps5_*.deb
+```
+
 ## Directory Layout
 
 ```
-build_image.sh                  # Main build script
+build_image.sh                  # Image builder (also supports --kernel-only)
 docker/
   kernel-builder/               # Kernel compilation container
   kernel-builder-arch/          # Repackages .deb kernel as .pkg.tar.zst
@@ -125,6 +144,7 @@ distros/
 boot/
   cmdline.txt                   # Kernel cmdline template (__DISTRO__ placeholder)
   vram.txt                      # VRAM allocation
+  kexec.sh                      # Generic kexec switcher
   kexec-{ubuntu2604,ubuntu2404,arch,alpine}.sh
 work/                           # Build artifacts (auto-created)
 linux-bin/                      # Compiled kernel packages
